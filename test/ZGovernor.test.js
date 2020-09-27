@@ -1,7 +1,7 @@
 const {expectRevert, time} = require('@openzeppelin/test-helpers');
 const ethers = require('ethers');
 const SusafeToken = artifacts.require('SusafeToken');
-const MasterChef = artifacts.require('MasterChef');
+const SusafeChef = artifacts.require('SusafeChef');
 const Timelock = artifacts.require('Timelock');
 const GovernorAlpha = artifacts.require('GovernorAlpha');
 const MockERC20 = artifacts.require('MockERC20');
@@ -15,7 +15,7 @@ contract('Governor', ([alice, minter, dev]) => {
     it('should work', async () => {
         this.susafe = await SusafeToken.new({from: alice});
         await this.susafe.delegate(dev, {from: dev});
-        this.chef = await MasterChef.new(this.susafe.address, dev, '100', '0', '0', {from: alice});
+        this.chef = await SusafeChef.new(this.susafe.address, dev, '100', '0', '0', {from: alice});
         await this.susafe.transferOwnership(this.chef.address, {from: alice});
         this.lp = await MockERC20.new('LPToken', 'LP', '10000000000', {from: minter});
         this.lp2 = await MockERC20.new('LPToken2', 'LP2', '10000000000', {from: minter});
@@ -66,3 +66,34 @@ contract('Governor', ([alice, minter, dev]) => {
         assert.equal((await this.chef.poolLength()).valueOf(), '2');
     });
 });
+
+export const supportedPools = [
+    {
+        pid: 0,
+        lpAddresses: {
+            1: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+        },
+        tokenAddresses: {
+            1: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+        },
+        name: 'USDC Seed Pool',
+        symbol: 'USD Coin',
+        tokenSymbol: 'USDC',
+        decimals: 6,
+        icon: '💵',
+    },
+    {
+        pid: 1,
+        lpAddresses: {
+            1: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+        },
+        tokenAddresses: {
+            1: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+        },
+        name: 'USDT Seed Pool',
+        symbol: 'Tether USD',
+        tokenSymbol: 'USDT',
+        decimals: 6,
+        icon: '₮',
+    },
+]

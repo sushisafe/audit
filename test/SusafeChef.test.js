@@ -1,21 +1,66 @@
 const {expectRevert, time} = require('@openzeppelin/test-helpers');
+
+const testUtils = require('./test.utils');
 const SusafeToken = artifacts.require('SusafeToken');
-const MasterChef = artifacts.require('MasterChef');
+const SusafeChef = artifacts.require('SusafeChef');
+const SusafeReferral = artifacts.require('SusafeReferral');
 const MockERC20 = artifacts.require('MockERC20');
 
-contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
+contract('SusafeChef.test', ([alice, bob, carol, dev, minter]) => {
     beforeEach(async () => {
         this.susafe = await SusafeToken.new({from: alice});
     });
 
     it('should set correct state variables', async () => {
-        this.chef = await MasterChef.new(this.susafe.address, '1000', '0', {from: alice});
+        this.chef = await SusafeChef.new(this.susafe.address, '1000', '0', {from: alice});
         await this.susafe.transferOwnership(this.chef.address, {from: alice});
         const susafe = await this.chef.susafe();
         const owner = await this.susafe.owner();
         assert.equal(susafe.valueOf(), this.susafe.address);
         assert.equal(owner.valueOf(), this.chef.address);
     });
+
+    it('test setSusafePerBlock', async () => {
+        this.chef = await SusafeChef.new(this.susafe.address, '1000', '0', {from: alice});
+        await this.susafe.transferOwnership(this.chef.address, {from: alice});
+        this.ref = await SusafeReferral.new({from: alice});
+        await this.ref.setAdminStatus(this.chef.address, true, {from: alice});
+        await this.chef.setRewardReferral(this.ref.address, {from: alice});
+        this.lp = await MockERC20.new('LPToken', 'LP', '10000000000', {from: minter});
+        await this.lp.transfer(alice, '1000', {from: minter});
+        await this.lp.transfer(bob, '1000', {from: minter});
+        await this.lp.transfer(carol, '1000', {from: minter});
+        await this.chef.add('100', this.lp.address, true, '0');
+        await this.lp.approve(this.chef.address, '1000', {from: bob});
+        await this.lp.approve(this.chef.address, '1000', {from: carol});
+        await this.chef.deposit(0, '100', carol, {from: bob});
+        await this.chef.deposit(0, '100', testUtils.ADDRESS_ZERO, {from: carol});
+
+        await time.advanceBlockTo('200');
+        await this.chef.deposit(0, '0', testUtils.ADDRESS_ZERO, {from: bob});
+        await this.chef.setSusafePerBlock(0, {from: alice});
+        await this.chef.deposit(0, '0', testUtils.ADDRESS_ZERO, {from: carol});
+        console.log('balanceOf(bob)=%s', String(await this.susafe.balanceOf(bob)).valueOf());
+        console.log('balanceOf(carol)=%s', String(await this.susafe.balanceOf(carol)).valueOf());
+
+        await time.advanceBlockTo('300');
+        await this.chef.deposit(0, '0', testUtils.ADDRESS_ZERO, {from: bob});
+        await this.chef.setEpochRewardMultipler(0, 0, {from: alice});
+        await this.chef.setSusafePerBlock(2000, {from: alice});
+        await this.chef.deposit(0, '0', testUtils.ADDRESS_ZERO, {from: carol});
+        console.log('balanceOf(bob)=%s', String(await this.susafe.balanceOf(bob)).valueOf());
+        console.log('balanceOf(carol)=%s', String(await this.susafe.balanceOf(carol)).valueOf());
+
+        await time.advanceBlockTo('400');
+        await this.chef.deposit(0, '0', testUtils.ADDRESS_ZERO, {from: bob});
+        await this.chef.deposit(0, '0', testUtils.ADDRESS_ZERO, {from: carol});
+        console.log('balanceOf(bob)=%s', String(await this.susafe.balanceOf(bob)).valueOf());
+        console.log('balanceOf(carol)=%s', String(await this.susafe.balanceOf(carol)).valueOf());
+
+        assert.equal((await this.susafe.balanceOf(carol)).valueOf(), '2000000000000000000000');
+    });
+
+    return;
 
     context('With ERC/LP token added to the field', () => {
         beforeEach(async () => {
@@ -31,10 +76,10 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
 
         it('should allow emergency withdraw', async () => {
             // 1 per block farming rate starting at block 100
-            this.chef = await MasterChef.new(this.susafe.address, '1', '100', {from: alice});
+            this.chef = await SusafeChef.new(this.susafe.address, '1', '100', {from: alice});
             await this.chef.add('100', this.lp.address, true, '0');
             await this.lp.approve(this.chef.address, '1000', {from: bob});
-            await this.chef.deposit(0, '100', {from: bob});
+            await this.chef.deposit(0, '100', testUtils.ADDRESS_ZERO, {from: bob});
             assert.equal((await this.lp.balanceOf(bob)).valueOf(), '900');
             await this.chef.emergencyWithdraw(0, {from: bob});
             assert.equal((await this.lp.balanceOf(bob)).valueOf(), '1000');
@@ -43,39 +88,43 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
         it('mint more than cap', async () => {
             // 1 per block farming rate starting at block 100
             // SusafeToken _susafe, uint256 _susafePerBlock, uint256 _startBlock
-            this.chef = await MasterChef.new(this.susafe.address, '1000000000000000000000', '100', {from: alice});
+            this.chef = await SusafeChef.new(this.susafe.address, '1000000000000000000000', '100', {from: alice});
             await this.susafe.transferOwnership(this.chef.address, {from: alice});
             // add pool function add(uint256 _allocPoint, IERC20 _lpToken, bool _withUpdate) public onlyOwner {
             await this.chef.add('100', this.lp.address, true, '0');
             await this.lp.approve(this.chef.address, '1000', {from: bob});
-            await this.chef.deposit(0, '100', {from: bob});
+            await this.chef.deposit(0, '100', testUtils.ADDRESS_ZERO, {from: bob});
             await time.advanceBlockTo('89');
-            await this.chef.deposit(0, '0', {from: bob}); // block 90
+            await this.chef.deposit(0, '0', testUtils.ADDRESS_ZERO, {from: bob}); // block 90
             assert.equal((await this.susafe.balanceOf(bob)).valueOf(), '0');
             await time.advanceBlockTo('94');
-            await this.chef.deposit(0, '0', {from: bob}); // block 95
+            await this.chef.deposit(0, '0', testUtils.ADDRESS_ZERO, {from: bob}); // block 95
             assert.equal((await this.susafe.balanceOf(bob)).valueOf(), '0');
             await time.advanceBlockTo('99');
-            await this.chef.deposit(0, '0', {from: bob}); // block 100
+            await this.chef.deposit(0, '0', testUtils.ADDRESS_ZERO, {from: bob}); // block 100
             assert.equal((await this.susafe.balanceOf(bob)).valueOf(), '0');
             await time.advanceBlockTo('100');
-            let tx = await this.chef.deposit(0, '0', {from: bob}); // block 101
+            let tx = await this.chef.deposit(0, '0', carol, {from: bob}); // block 101
             // console.log(tx.receipt.gasUsed);
-            assert.equal((await this.susafe.balanceOf(bob)).valueOf(), '200000000000000000000000');
+            assert.equal((await this.susafe.balanceOf(bob)).valueOf(), '198000000000000000000000');
+            assert.equal((await this.susafe.balanceOf(carol)).valueOf(), '2000000000000000000000');
             await time.advanceBlockTo('104');
             // await this.chef.transferSusafeOwnership(bob, {from: alice});
-            await this.chef.deposit(0, '0', {from: bob}); // block 105
-            assert.equal((await this.susafe.balanceOf(bob)).valueOf(), '210000000000000000000000');
+            await this.chef.deposit(0, '0', testUtils.ADDRESS_ZERO, {from: bob}); // block 105
+            assert.equal((await this.susafe.balanceOf(bob)).valueOf(), '208000000000000000000000');
+            assert.equal((await this.susafe.balanceOf(carol)).valueOf(), '2000000000000000000000');
             assert.equal((await this.susafe.totalSupply()).valueOf(), '210000000000000000000000');
-            await this.susafe.burn('210000000000000000000000', {from: bob});
+            await this.susafe.burn('208000000000000000000000', {from: bob});
             assert.equal((await this.susafe.balanceOf(bob)).valueOf(), '0');
-            assert.equal((await this.susafe.totalSupply()).valueOf(), '0');
+            assert.equal((await this.susafe.totalSupply()).valueOf(), '2000000000000000000000');
         });
+
+        return;
 
         it('should give out SUSAFEs only after farming time', async () => {
             // 1 per block farming rate starting at block 100
             // SusafeToken _susafe, uint256 _susafePerBlock, uint256 _startBlock
-            this.chef = await MasterChef.new(this.susafe.address, '1', '100', {from: alice});
+            this.chef = await SusafeChef.new(this.susafe.address, '1', '100', {from: alice});
             for (let i = 0; i < 5; i++) {
                 console.log('epochEndBlocks[%d] = %s', i, await this.chef.epochEndBlocks(i));
             }
@@ -115,7 +164,7 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
 
         it('should not distribute SUSAFEs if no one deposit', async () => {
             // 1 per block farming rate starting at block 100
-            this.chef = await MasterChef.new(this.susafe.address, '1', '100', {from: alice});
+            this.chef = await SusafeChef.new(this.susafe.address, '1', '100', {from: alice});
             await this.susafe.transferOwnership(this.chef.address, {from: alice});
             await this.chef.add('100', this.lp.address, true);
             await this.lp.approve(this.chef.address, '1000', {from: bob});
@@ -139,7 +188,7 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
 
         it('should distribute SUSAFEs properly for each staker', async () => {
             // 100 per block farming rate starting at block 300 with bonus until block 1000
-            this.chef = await MasterChef.new(this.susafe.address, '100', '300', '1000', {from: alice});
+            this.chef = await SusafeChef.new(this.susafe.address, '100', '300', '1000', {from: alice});
             await this.susafe.transferOwnership(this.chef.address, {from: alice});
             await this.chef.add('100', this.lp.address, true);
             await this.lp.approve(this.chef.address, '1000', {from: alice});
@@ -156,7 +205,7 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
             await this.chef.deposit(0, '30', {from: carol});
             // Alice deposits 10 more LPs at block 320. At this point:
             //   Alice should have: 4*1000 + 4*1/3*1000 + 2*1/6*1000 = 5666
-            //   MasterChef should have the remaining: 10000 - 5666 = 4334
+            //   SusafeChef should have the remaining: 10000 - 5666 = 4334
             await time.advanceBlockTo('319')
             await this.chef.deposit(0, '10', {from: alice});
             assert.equal((await this.susafe.totalSupply()).valueOf(), '11000');
@@ -197,7 +246,7 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
 
         it('should give proper SUSAFEs allocation to each pool', async () => {
             // 100 per block farming rate starting at block 400 with bonus until block 1000
-            this.chef = await MasterChef.new(this.susafe.address, '100', '400', '1000', {from: alice});
+            this.chef = await SusafeChef.new(this.susafe.address, '100', '400', '1000', {from: alice});
             await this.susafe.transferOwnership(this.chef.address, {from: alice});
             await this.lp.approve(this.chef.address, '1000', {from: alice});
             await this.lp2.approve(this.chef.address, '1000', {from: bob});
@@ -224,7 +273,7 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
 
         it('should stop giving bonus SUSAFEs after the bonus period ends', async () => {
             // 100 per block farming rate starting at block 500 with bonus until block 600
-            this.chef = await MasterChef.new(this.susafe.address, '100', '500', '600', {from: alice});
+            this.chef = await SusafeChef.new(this.susafe.address, '100', '500', '600', {from: alice});
             await this.susafe.transferOwnership(this.chef.address, {from: alice});
             await this.lp.approve(this.chef.address, '1000', {from: alice});
             await this.chef.add('1', this.lp.address, true);

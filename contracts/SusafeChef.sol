@@ -22,14 +22,19 @@ interface IMigratorChef {
     function migrate(IERC20 token) external returns (IERC20);
 }
 
-// MasterChef is the master of Susafe. He can make Susafe and he is a fair guy.
+interface ISusafeReferral {
+    function setReferrer(address farmer, address referrer) external;
+    function getReferrer(address farmer) external view returns (address);
+}
+
+// SusafeChef is the master of Susafe. He can make Susafe and he is a fair guy.
 //
 // Note that it's ownable and the owner wields tremendous power. The ownership
 // will be transferred to a governance smart contract once SUSAFE is sufficiently
 // distributed and the community can show to govern itself.
 //
 // Have fun reading it. Hopefully it's bug-free. God bless.
-contract MasterChef is Ownable {
+contract SusafeChef is Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -58,6 +63,9 @@ contract MasterChef is Ownable {
         uint256 accSusafePerShare; // Accumulated SUSAFEs per share, times 1e12. See below.
     }
 
+    uint256 public constant REFERRAL_COMMISSION_PERCENT = 1;
+    address public rewardReferral;
+
     // The SUSAFE TOKEN!
     SusafeToken public susafe;
     // SUSAFE tokens created per block.
@@ -77,9 +85,9 @@ contract MasterChef is Ownable {
     uint256[6] public epochEndBlocks;
 
     // Reward multipler for each of 7 epoches (epochIndex: reward multipler)
-    uint256[7] public epochRewardMultiplers = [200, 400, 600, 800, 400, 200, 1];
+    uint256[7] public epochRewardMultiplers = [100, 400, 600, 800, 400, 200, 1];
 
-    uint256 public constant BLOCKS_PER_DAY = 65;
+    uint256 public constant BLOCKS_PER_DAY = 6500;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -98,7 +106,7 @@ contract MasterChef is Ownable {
         epochEndBlocks[2] = epochEndBlocks[1] + BLOCKS_PER_DAY * 7; // 1 week
         epochEndBlocks[3] = epochEndBlocks[2] + BLOCKS_PER_DAY * 14; // 2 weeks
         epochEndBlocks[4] = epochEndBlocks[3] + BLOCKS_PER_DAY * 14; // 2 weeks
-        epochEndBlocks[5] = epochEndBlocks[4] + BLOCKS_PER_DAY * 7 * 33 / 10; // 3.3 weeks
+        epochEndBlocks[5] = epochEndBlocks[4] + BLOCKS_PER_DAY * 7 * 34 / 10; // 3.4 weeks
     }
 
     function poolLength() external view returns (uint256) {
@@ -121,6 +129,27 @@ contract MasterChef is Ownable {
             lastRewardBlock: _lastRewardBlock,
             accSusafePerShare: 0
         }));
+    }
+
+    function setSusafePerBlock(uint256 _susafePerBlock) public onlyOwner {
+        massUpdatePools();
+        susafePerBlock = _susafePerBlock;
+    }
+
+    function setEpochEndBlock(uint8 _index, uint256 _epochEndBlock) public onlyOwner {
+        require(_index < 6, "_index out of range");
+        require(epochEndBlocks[_index] > block.number, "Too late to update");
+        epochEndBlocks[_index] = _epochEndBlock;
+    }
+
+    function setEpochRewardMultipler(uint8 _index, uint256 _epochRewardMultipler) public onlyOwner {
+        require(_index < 7, "Index out of range");
+        require(_index == 6 || epochEndBlocks[_index] > block.number, "Too late to update");
+        epochRewardMultiplers[_index] = _epochRewardMultipler;
+    }
+
+    function setRewardReferral(address _rewardReferral) external onlyOwner {
+        rewardReferral = _rewardReferral;
     }
 
     // Update the given pool's SUSAFE allocation point. Can only be called by the owner.
@@ -206,15 +235,28 @@ contract MasterChef is Ownable {
         pool.lastRewardBlock = block.number;
     }
 
-    // Deposit LP tokens to MasterChef for SUSAFE allocation.
-    function deposit(uint256 _pid, uint256 _amount) public {
+    // Deposit LP tokens to SusafeChef for SUSAFE allocation.
+    function deposit(uint256 _pid, uint256 _amount, address _referrer) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         updatePool(_pid);
+        if (rewardReferral != address(0) && _referrer != address(0)) {
+            ISusafeReferral(rewardReferral).setReferrer(msg.sender, _referrer);
+        }
         if (user.amount > 0) {
             uint256 pending = user.amount.mul(pool.accSusafePerShare).div(1e12).sub(user.rewardDebt);
             if(pending > 0) {
-                safeSusafeTransfer(msg.sender, pending);
+                uint256 actualPaid = pending.mul(100 - REFERRAL_COMMISSION_PERCENT).div(100); // 99%
+                uint256 commission = pending - actualPaid; // 1%
+                safeSusafeTransfer(msg.sender, actualPaid);
+                if (rewardReferral != address(0)) {
+                    _referrer = ISusafeReferral(rewardReferral).getReferrer(msg.sender);
+                }
+                if (_referrer != address(0)) { // send commission to referrer
+                    safeSusafeTransfer(_referrer, commission);
+                } else { // or burn
+                    safeSusafeBurn(commission);
+                }
             }
         }
         if(_amount > 0) {
@@ -225,7 +267,7 @@ contract MasterChef is Ownable {
         emit Deposit(msg.sender, _pid, _amount);
     }
 
-    // Withdraw LP tokens from MasterChef.
+    // Withdraw LP tokens from SusafeChef.
     function withdraw(uint256 _pid, uint256 _amount) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
@@ -233,7 +275,18 @@ contract MasterChef is Ownable {
         updatePool(_pid);
         uint256 pending = user.amount.mul(pool.accSusafePerShare).div(1e12).sub(user.rewardDebt);
         if(pending > 0) {
-            safeSusafeTransfer(msg.sender, pending);
+            uint256 actualPaid = pending.mul(100 - REFERRAL_COMMISSION_PERCENT).div(100); // 99%
+            uint256 commission = pending - actualPaid; // 1%
+            safeSusafeTransfer(msg.sender, actualPaid);
+            address _referrer = address(0);
+            if (rewardReferral != address(0)) {
+                _referrer = ISusafeReferral(rewardReferral).getReferrer(msg.sender);
+            }
+            if (_referrer != address(0)) { // send commission to referrer
+                safeSusafeTransfer(_referrer, commission);
+            } else { // or burn
+                safeSusafeBurn(commission);
+            }
         }
         if(_amount > 0) {
             user.amount = user.amount.sub(_amount);
@@ -253,14 +306,26 @@ contract MasterChef is Ownable {
         user.rewardDebt = 0;
     }
 
-    // Safe susafe mint, ensure it is never over cap.
+    // Safe susafe mint, ensure it is never over cap and we are the current owner.
     function safeSusafeMint(uint256 _amount) internal {
-        uint256 totalSupply = susafe.totalSupply();
-        uint256 cap = susafe.cap();
-        if (totalSupply.add(_amount) > cap) {
-            susafe.mint(address(this), cap.sub(totalSupply));
+        if (susafe.owner() == address(this)) {
+            uint256 totalSupply = susafe.totalSupply();
+            uint256 cap = susafe.cap();
+            if (totalSupply.add(_amount) > cap) {
+                susafe.mint(address(this), cap.sub(totalSupply));
+            } else {
+                susafe.mint(address(this), _amount);
+            }
+        }
+    }
+
+    // Safe susafe burn function, just in case if rounding error causes pool to not have enough SUSAFEs.
+    function safeSusafeBurn(uint256 _amount) internal {
+        uint256 susafeBal = susafe.balanceOf(address(this));
+        if (_amount > susafeBal) {
+            susafe.burn(susafeBal);
         } else {
-            susafe.mint(address(this), _amount);
+            susafe.burn(_amount);
         }
     }
 

@@ -128,6 +128,19 @@
 		"type": "function"
 	},
 	{
+		"inputs": [],
+		"name": "REFERRAL_COMMISSION_PERCENT",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
 		"inputs": [
 			{
 				"internalType": "uint256",
@@ -166,6 +179,11 @@
 				"internalType": "uint256",
 				"name": "_amount",
 				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "_referrer",
+				"type": "address"
 			}
 		],
 		"name": "deposit",
@@ -373,6 +391,19 @@
 		"type": "function"
 	},
 	{
+		"inputs": [],
+		"name": "rewardReferral",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
 		"inputs": [
 			{
 				"internalType": "uint256",
@@ -398,12 +429,74 @@
 	{
 		"inputs": [
 			{
+				"internalType": "uint8",
+				"name": "_index",
+				"type": "uint8"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_epochEndBlock",
+				"type": "uint256"
+			}
+		],
+		"name": "setEpochEndBlock",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint8",
+				"name": "_index",
+				"type": "uint8"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_epochRewardMultipler",
+				"type": "uint256"
+			}
+		],
+		"name": "setEpochRewardMultipler",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "contract IMigratorChef",
 				"name": "_migrator",
 				"type": "address"
 			}
 		],
 		"name": "setMigrator",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_rewardReferral",
+				"type": "address"
+			}
+		],
+		"name": "setRewardReferral",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_susafePerBlock",
+				"type": "uint256"
+			}
+		],
+		"name": "setSusafePerBlock",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"

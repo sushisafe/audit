@@ -1,7 +1,7 @@
 const {expectRevert, time} = require('@openzeppelin/test-helpers');
 const ethers = require('ethers');
 const SusafeToken = artifacts.require('SusafeToken');
-const MasterChef = artifacts.require('MasterChef');
+const SusafeChef = artifacts.require('SusafeChef');
 const MockERC20 = artifacts.require('MockERC20');
 const Timelock = artifacts.require('Timelock');
 
@@ -13,7 +13,7 @@ function encodeParameters(types, values) {
 contract('Timelock', ([alice, bob, carol, dev, minter]) => {
     beforeEach(async () => {
         this.susafe = await SusafeToken.new({from: alice});
-        this.timelock = await Timelock.new(bob, '259200', {from: alice});
+        this.timelock = await Timelock.new(bob, '21600', {from: alice});
     });
 
     it('should not allow non-owner to do operation', async () => {
@@ -60,12 +60,12 @@ contract('Timelock', ([alice, bob, carol, dev, minter]) => {
         assert.equal((await this.susafe.owner()).valueOf(), carol);
     });
 
-    it('should also work with MasterChef', async () => {
+    it('should also work with SusafeChef', async () => {
         this.lp1 = await MockERC20.new('LPToken', 'LP', '10000000000', {from: minter});
         this.lp2 = await MockERC20.new('LPToken', 'LP', '10000000000', {from: minter});
-        this.chef = await MasterChef.new(this.susafe.address, dev, '1000', '0', '1000', {from: alice});
+        this.chef = await SusafeChef.new(this.susafe.address, '1000', '0', {from: alice});
         await this.susafe.transferOwnership(this.chef.address, {from: alice});
-        await this.chef.add('100', this.lp1.address, true);
+        await this.chef.add('100', this.lp1.address, true, 0);
         await this.chef.transferOwnership(this.timelock.address, {from: alice});
         const eta = (await time.latest()).add(time.duration.days(4));
         await this.timelock.queueTransaction(
@@ -73,8 +73,8 @@ contract('Timelock', ([alice, bob, carol, dev, minter]) => {
             encodeParameters(['uint256', 'uint256', 'bool'], ['0', '200', false]), eta, {from: bob},
         );
         await this.timelock.queueTransaction(
-            this.chef.address, '0', 'add(uint256,address,bool)',
-            encodeParameters(['uint256', 'address', 'bool'], ['100', this.lp2.address, false]), eta, {from: bob},
+            this.chef.address, '0', 'add(uint256,address,bool,uint256)',
+            encodeParameters(['uint256', 'address', 'bool', 'uint256'], ['100', this.lp2.address, false, 0]), eta, {from: bob},
         );
         await time.increase(time.duration.days(4));
         await this.timelock.executeTransaction(
@@ -82,9 +82,10 @@ contract('Timelock', ([alice, bob, carol, dev, minter]) => {
             encodeParameters(['uint256', 'uint256', 'bool'], ['0', '200', false]), eta, {from: bob},
         );
         await this.timelock.executeTransaction(
-            this.chef.address, '0', 'add(uint256,address,bool)',
-            encodeParameters(['uint256', 'address', 'bool'], ['100', this.lp2.address, false]), eta, {from: bob},
+            this.chef.address, '0', 'add(uint256,address,bool,uint256)',
+            encodeParameters(['uint256', 'address', 'bool', 'uint256'], ['100', this.lp2.address, false, 0]), eta, {from: bob},
         );
+        console.log(encodeParameters(['uint256', 'address', 'bool', 'uint256'], ['3000', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', false, 0]));
         assert.equal((await this.chef.poolInfo('0')).valueOf().allocPoint, '200');
         assert.equal((await this.chef.totalAllocPoint()).valueOf(), '300');
         assert.equal((await this.chef.poolLength()).valueOf(), '2');

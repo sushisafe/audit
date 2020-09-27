@@ -50,7 +50,7 @@ contract SusafeToken is ERC20Capped("SusafeToken", "SUSAFE", 210000 ether), Owna
         dev = _dev;
     }
 
-    /// @notice Creates `_amount` token to `_to`. Must only be called by the owner (MasterChef).
+    /// @notice Creates `_amount` token to `_to`. Must only be called by the owner (SusafeChef).
     function mint(address _to, uint256 _amount) public {
         require(owner() == msg.sender || dev == msg.sender, "Ownable: caller is not the owner nor dev fund contract");
         _mint(_to, _amount);

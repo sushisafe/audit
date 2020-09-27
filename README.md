@@ -5,6 +5,8 @@
 
 https://sushisafe.org
 
+![Sushisafe banner](https://miro.medium.com/max/700/1*Jp1CY9NDwyNoO1ZZ75-9wQ.jpeg)
+
 Decentralized Finance (DeFi) is the movement that leverages decentralized networks to transform old financial products into trustless and transparent protocols that run without intermediaries. DeFi is expected to play an important role in the evolution of the financial sector for many reasons.
 
 Fast & furious, UniSwap and SushiSwap have taken the DeFi world by storm within weeks. UniSwap has become one of the most powerful DeFi forces with daily trading volume surpassing CoinBase Pro. While still having its own limitations, SushiSwap has undeniably initiated the unprecedented liquidity migration with over $800M moving from UniSwap to its platform.
